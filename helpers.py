@@ -28,6 +28,7 @@ MIN_DOWN="~/git/Pymodoro/pymodoro-cli -md"
 SEC_UP="~/git/Pymodoro/pymodoro-cli -su"
 SEC_DOWN="~/git/Pymodoro/pymodoro-cli -sd"
 NEXT_PHASE="~/git/Pymodoro/pymodoro-cli -n"
+STOP_POM="~/git/Pymodoro/pymodoro-cli -e"
 E_CM="%{A}"
 
 BYTE_CMD={}

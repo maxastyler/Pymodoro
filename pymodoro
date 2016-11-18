@@ -120,6 +120,7 @@ class Pymodoro:
     def create_status(self):
         lock.acquire()  
         status_string=""
+        status_string+="%{A:"+STOP_POM+":}x|%{A}"
         if self.phase!=3:
             status_string+=str(self.pomodoro_completed) + "|" + str(self.phase)+ "|" 
             sec_time=sec_to_MS(self.current_time_limit-self.time)  
