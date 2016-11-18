@@ -1,12 +1,56 @@
 #!/usr/bin/env python3
 
 import socket 
+import argparse
 
 from helpers import *
 
-try:
-    sock=socket.create_connection(("127.0.0.1", 9667))
-    sock.sendall(HASH_NAME+BYTE_CMD["next_phase"])
-    sock.close()
-except Exception as e:
-    print("ERROR {}".format(e))
+PORT=9667
+
+def get_status():
+    try:
+        sock=socket.create_connection(("127.0.0.1", PORT))
+        sock.sendall(HASH_NAME+BYTE_CMD["status"])
+        data=sock.recv(256)
+        print("P"+data.decode())
+        sock.close()
+    except Exception as e:
+        print("P")
+
+def send_command(command):
+    try:
+        sock=socket.create_connection(("127.0.0.1", PORT))
+        sock.sendall(HASH_NAME+BYTE_CMD[command])
+        sock.close()
+    except Exception as e:
+        print("ERROR {}".format(e))
+
+def add_time(time):
+    try:
+        sock=socket.create_connection(("127.0.0.1", PORT))
+        sock.sendall(HASH_NAME+BYTE_CMD["add_time"]+str(time).encode())
+        sock.close()
+    except Exception as e:
+        print("ERROR {}".format(e))
+     
+parser = argparse.ArgumentParser(description="An interface to the Pymodoro daemon")
+parser.add_argument("--start", "-s", action="store_true", help="Start the daemon")
+parser.add_argument("--stop", "-e", action="store_true", help="Quit the daemon")
+parser.add_argument("--status", "-g", action="store_true", help="Get the status of the daemon")
+parser.add_argument("--next_phase", "-n", action="store_true", help="Set the daemon to the next phase")
+parser.add_argument("--seconds-up", "-su", action="store_true", help="Add 1 to the current seconds counter")
+parser.add_argument("--seconds-down", "-sd", action="store_true", help="Remove 1 from the current seconds counter")
+parser.add_argument("--minutes-up", "-mu", action="store_true", help="Add 1 to the minutes counter")
+parser.add_argument("--minutes-down", "-md", action="store_true", help="Remove 1 to the minutes counter")
+args=parser.parse_args()
+if args.start:
+    pass
+elif args.next_phase:
+    print("SENDING")
+    send_command("next_phase")
+elif args.status: get_status() 
+elif args.stop: send_command("stop")
+elif args.seconds_up: add_time(1)
+elif args.seconds_down: add_time(-1)
+elif args.minutes_up: add_time(60)
+elif args.minutes_down: add_time(-60)

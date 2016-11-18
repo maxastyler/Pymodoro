@@ -9,14 +9,14 @@ from threading import Thread, Lock
 from helpers import *
 
 PORT=9667
-MESSAGE_SIZE=64
+MESSAGE_SIZE=256
 USAGE_STRING="Usage:\nstart - start/restart the daemon\n(halt/quit/close) - halt the daemon"
 DAEMON_DELAY=0.1
-NUM_PHASES=2
-POMODORO_TIME=3
-SMALL_BREAK_TIME=3
-LARGE_BREAK_TIME=3
-WAIT_FOR_INPUT=False
+NUM_PHASES=4
+POMODORO_TIME=25*60
+SMALL_BREAK_TIME=5*60
+LARGE_BREAK_TIME=30*60
+WAIT_FOR_INPUT=True
 TIME_LIMIT={
         0:POMODORO_TIME,
         1:SMALL_BREAK_TIME,
@@ -28,9 +28,12 @@ class Pymodoro:
     def __init__(self):
         self.running=False
         self.pomodoro_completed=0
-        self.phase=0
+        self.phase=3
+        self.target_phase=0
+        self.time=0
+        self.current_time_limit=0
         lock.acquire()
-        self.set_phase(0) #phases are, 0 - working, 1 - small break, 2 - big break, 3 - waiting for input
+        self.set_phase(0) #phases are, 0 - working, 1 - small break, 2 - big break, 3 - waiting for input 4 - paused
         lock.release()
 
     def pomodoro_loop(self):
@@ -44,7 +47,7 @@ class Pymodoro:
                 if self.time>self.current_time_limit:
                     self.next_phase()
             lock.release()
-            sleep(0.3)
+            sleep(0.1)
 
     def run(self):
         self.running=True
@@ -61,7 +64,6 @@ class Pymodoro:
         self.pom_thread.start() 
 
         while self.running:
-            print(self.phase)
             readable, writeable, errored=select.select(read_list, [], [])
             for s in readable:
                 if s is self.sock:
@@ -76,12 +78,18 @@ class Pymodoro:
     def process_data(self, data, connection):
         if data[0:4]==HASH_NAME:
             if data[4:8]==BYTE_CMD['status']:
-                print("YES")
                 connection.sendall(self.create_status().encode())
             elif data[4:8]==BYTE_CMD['next_phase']:
                 lock.acquire()
                 if self.phase==3: self.next_phase()
                 lock.release()
+            elif data[4:8]==BYTE_CMD['stop']:
+                lock.acquire()
+                self.running=False
+                lock.release()
+            elif data[4:8]==BYTE_CMD['add_time']:
+                seconds_add=int(data[8:].decode())
+                self.current_time_limit+=seconds_add
 
     def set_phase(self, phase):
         self.time=0
@@ -111,10 +119,28 @@ class Pymodoro:
 
     def create_status(self):
         lock.acquire()  
-        built_status="place"
+        status_string=""
+        if self.phase!=3:
+            status_string+=str(self.pomodoro_completed) + "|" + str(self.phase)+ "|" 
+            sec_time=sec_to_MS(self.current_time_limit-self.time)  
+            a, b=sec_time.split(':')
+            status_string+="%{A4:"+MIN_UP+":}%{A5:"+MIN_DOWN+":}"+a+E_CM+E_CM+':'
+            status_string+="%{A4:"+SEC_UP+":}%{A5:"+SEC_DOWN+":}"+b+E_CM+E_CM
+        else:
+            status_string+="%{A:"+NEXT_PHASE+":}"
+            if self.target_phase==0:
+                status_string+="Finished Break!"
+            else:
+                status_string+="Finished Work!"
+            status_string+=E_CM
         lock.release()
-        return built_status
+        return status_string
+
+    def daemonise():    
+        with daemon.DaemonContext():
+            a=Pymodoro()
+            a.run()
 
 if __name__=='__main__':
-    a=Pymodoro()
-    a.run()
+    pom=Pymodoro
+    pom.daemonise()
