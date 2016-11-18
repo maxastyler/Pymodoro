@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+
+import socket 
+
+from helpers import *
+
+try:
+    sock=socket.create_connection(("127.0.0.1", 9667))
+    sock.sendall(HASH_NAME+BYTE_CMD["next_phase"])
+    sock.close()
+except Exception as e:
+    print("ERROR {}".format(e))

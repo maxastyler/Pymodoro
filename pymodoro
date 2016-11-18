@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+import daemon
+import socket
+import argparse
+import select
+from time import time, sleep
+from threading import Thread, Lock
+
+from helpers import *
+
+PORT=9667
+MESSAGE_SIZE=64
+USAGE_STRING="Usage:\nstart - start/restart the daemon\n(halt/quit/close) - halt the daemon"
+DAEMON_DELAY=0.1
+NUM_PHASES=2
+POMODORO_TIME=3
+SMALL_BREAK_TIME=3
+LARGE_BREAK_TIME=3
+WAIT_FOR_INPUT=False
+TIME_LIMIT={
+        0:POMODORO_TIME,
+        1:SMALL_BREAK_TIME,
+        2:LARGE_BREAK_TIME
+        }
+lock=Lock()
+
+class Pymodoro:
+    def __init__(self):
+        self.running=False
+        self.pomodoro_completed=0
+        self.phase=0
+        lock.acquire()
+        self.set_phase(0) #phases are, 0 - working, 1 - small break, 2 - big break, 3 - waiting for input
+        lock.release()
+
+    def pomodoro_loop(self):
+        time_new=time()
+        while self.running:
+            time_old=time_new
+            time_new=time()
+            lock.acquire()
+            if self.phase!=3:
+                self.time+=time_new-time_old
+                if self.time>self.current_time_limit:
+                    self.next_phase()
+            lock.release()
+            sleep(0.3)
+
+    def run(self):
+        self.running=True
+        self.sock=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR, 1)
+        self.server_address=("", PORT)
+        self.sock.bind(self.server_address)
+        self.sock.listen(2)
+
+        read_list=[self.sock]
+
+        self.pom_thread=Thread(target=self.pomodoro_loop)
+        self.pom_thread.setDaemon(True)
+        self.pom_thread.start() 
+
+        while self.running:
+            print(self.phase)
+            readable, writeable, errored=select.select(read_list, [], [])
+            for s in readable:
+                if s is self.sock:
+                    connection, client_address=self.sock.accept()
+                    read_list.append(connection)
+                else:
+                    data=s.recv(MESSAGE_SIZE)
+                    self.process_data(data, s)
+                    s.close()
+                    read_list.remove(s)
+                    
+    def process_data(self, data, connection):
+        if data[0:4]==HASH_NAME:
+            if data[4:8]==BYTE_CMD['status']:
+                print("YES")
+                connection.sendall(self.create_status().encode())
+            elif data[4:8]==BYTE_CMD['next_phase']:
+                lock.acquire()
+                if self.phase==3: self.next_phase()
+                lock.release()
+
+    def set_phase(self, phase):
+        self.time=0
+        if WAIT_FOR_INPUT:
+            if self.phase!=3:
+                self.target_phase=phase
+                self.phase=3
+            else:
+                self.phase=self.target_phase
+                self.current_time_limit=TIME_LIMIT[self.phase]
+        else: 
+            self.phase=phase
+            self.current_time_limit=TIME_LIMIT[phase]
+
+    def next_phase(self):
+        #if current phase is working, check to see how many pomodoros have been had
+        if self.phase==0:
+            self.pomodoro_completed+=1 
+            if (self.pomodoro_completed%NUM_PHASES)==0:
+                self.set_phase(2)
+            else:
+                self.set_phase(1)
+        elif self.phase==3:
+            self.set_phase(self.target_phase)
+        else:
+            self.set_phase(0)
+
+    def create_status(self):
+        lock.acquire()  
+        built_status="place"
+        lock.release()
+        return built_status
+
+if __name__=='__main__':
+    a=Pymodoro()
+    a.run()
